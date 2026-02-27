@@ -98,6 +98,30 @@ export function GenerationForm() {
               )}
             />
 
+            <FormField
+              control={form.control}
+              name="engine"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>TTS Engine</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="cosyvoice">Qwen3-TTS</SelectItem>
+                      <SelectItem value="f5">F5-TTS</SelectItem>
+                      <SelectItem value="e2">E2-TTS</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>Choose the text-to-speech engine</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid gap-4 md:grid-cols-3">
               <FormField
                 control={form.control}
