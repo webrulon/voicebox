@@ -12,4 +12,6 @@ export type GenerationRequest = {
   seed?: number | null;
   model_size?: string | null;
   instruct?: string | null;
+  engine?: string;
+  model_type?: string | null;
 };

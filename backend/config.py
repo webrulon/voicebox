@@ -66,3 +66,21 @@ def get_models_dir() -> Path:
     path = _data_dir / "models"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+# F5-TTS and E2-TTS model type configurations
+F5_MODEL_TYPES = {
+    "F5TTS_v1_Base": {
+        "description": "Diffusion Transformer + ConvNeXt V2",
+        "rtf": 0.15,  # Real-Time Factor (lower is faster)
+        "quality": "high",
+        "speed": "fast",
+        "recommended": True,
+    },
+    "E2TTS_Base": {
+        "description": "Flat-UNet Transformer",
+        "rtf": None,  # Slower than F5, exact RTF varies
+        "quality": "high",
+        "speed": "medium",
+        "recommended": False,
+    },
+}

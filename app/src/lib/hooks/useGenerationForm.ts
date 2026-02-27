@@ -16,6 +16,8 @@ const generationSchema = z.object({
   seed: z.number().int().optional(),
   modelSize: z.enum(['1.7B', '0.6B']).optional(),
   instruct: z.string().max(500).optional(),
+  engine: z.enum(['cosyvoice', 'f5', 'e2']).default('cosyvoice'),
+  model_type: z.string().optional(),
 });
 
 export type GenerationFormValues = z.infer<typeof generationSchema>;
@@ -47,6 +49,8 @@ export function useGenerationForm(options: UseGenerationFormOptions = {}) {
       seed: undefined,
       modelSize: '1.7B',
       instruct: '',
+      engine: 'cosyvoice',
+      model_type: undefined,
       ...options.defaultValues,
     },
   });
@@ -89,6 +93,8 @@ export function useGenerationForm(options: UseGenerationFormOptions = {}) {
         seed: data.seed,
         model_size: data.modelSize,
         instruct: data.instruct || undefined,
+        engine: data.engine,
+        model_type: data.model_type,
       });
 
       toast({

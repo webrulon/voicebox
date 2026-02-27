@@ -29,6 +29,8 @@ async def create_generation(
     seed: Optional[int],
     db: Session,
     instruct: Optional[str] = None,
+    engine: Optional[str] = None,
+    model_type: Optional[str] = None,
 ) -> GenerationResponse:
     """
     Create a new generation history entry.
@@ -42,6 +44,8 @@ async def create_generation(
         seed: Random seed used (if any)
         db: Database session
         instruct: Natural language instruction used (if any)
+        engine: TTS engine used ('qwen', 'f5', 'e2')
+        model_type: Model type/size used
 
     Returns:
         Created generation entry
@@ -55,6 +59,8 @@ async def create_generation(
         duration=duration,
         seed=seed,
         instruct=instruct,
+        engine=engine,
+        model_type=model_type,
         created_at=datetime.utcnow(),
     )
 
