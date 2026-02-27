@@ -1344,6 +1344,26 @@ async def get_model_status():
             return whisper_model.is_loaded() and getattr(whisper_model, 'model_size', None) == model_size
         except Exception:
             return False
+
+    def check_f5_tts_loaded(model_type: str):
+        """Check if F5-TTS model is loaded with specific model_type."""
+        try:
+            from .backends import get_tts_backend
+            # Get F5 backend
+            f5_backend = get_tts_backend(engine='f5', model_type=model_type)
+            return f5_backend.is_loaded() and getattr(f5_backend, '_current_model_type', None) == model_type
+        except Exception:
+            return False
+
+    def check_e2_tts_loaded(model_type: str):
+        """Check if E2-TTS model is loaded with specific model_type."""
+        try:
+            from .backends import get_tts_backend
+            # Get E2 backend (uses same F5TTSBackend with different model_type)
+            e2_backend = get_tts_backend(engine='e2', model_type=model_type)
+            return e2_backend.is_loaded() and getattr(e2_backend, '_current_model_type', None) == model_type
+        except Exception:
+            return False
     
     # Use backend-specific model IDs
     if backend_type == "mlx":
@@ -1376,6 +1396,20 @@ async def get_model_status():
             "hf_repo_id": tts_0_6b_id,
             "model_size": "0.6B",
             "check_loaded": lambda: check_tts_loaded("0.6B"),
+        },
+        {
+            "model_name": "f5-tts-base",
+            "display_name": "F5-TTS Base",
+            "hf_repo_id": "f5-tts/F5TTS_v1_Base",  # Placeholder for F5-TTS cache location
+            "model_size": "F5TTS_v1_Base",
+            "check_loaded": lambda: check_f5_tts_loaded("F5TTS_v1_Base"),
+        },
+        {
+            "model_name": "e2-tts-base",
+            "display_name": "E2-TTS Base",
+            "hf_repo_id": "f5-tts/E2TTS_Base",  # Placeholder for E2-TTS cache location
+            "model_size": "E2TTS_Base",
+            "check_loaded": lambda: check_e2_tts_loaded("E2TTS_Base"),
         },
         {
             "model_name": "whisper-base",
@@ -1430,9 +1464,30 @@ async def get_model_status():
             downloaded = False
             size_mb = None
             loaded = False
-            
-            # Method 1: Try using scan_cache_dir if available
-            if cache_info:
+
+            # Special handling for F5-TTS and E2-TTS models (use different cache location)
+            is_f5_model = config["model_name"] in ["f5-tts-base", "e2-tts-base"]
+
+            if is_f5_model:
+                # F5-TTS models are stored in ~/.cache/f5_tts/
+                try:
+                    f5_cache_dir = Path.home() / ".cache" / "f5_tts"
+                    if f5_cache_dir.exists():
+                        # Look for model-specific files
+                        model_files = list(f5_cache_dir.rglob("*.pt")) + list(f5_cache_dir.rglob("*.pth"))
+                        if model_files:
+                            downloaded = True
+                            # Calculate size
+                            try:
+                                total_size = sum(f.stat().st_size for f in model_files)
+                                size_mb = total_size / (1024 * 1024)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
+            # Method 1: Try using scan_cache_dir if available (for HuggingFace models)
+            elif cache_info:
                 repo_id = config["hf_repo_id"]
                 for repo in cache_info.repos:
                     if repo.repo_id == repo_id:
@@ -1470,7 +1525,8 @@ async def get_model_status():
                         break
             
             # Method 2: Fallback to checking cache directory directly (using HuggingFace's OS-specific cache location)
-            if not downloaded:
+            # Skip this check for F5-TTS models as they don't use HuggingFace cache
+            if not downloaded and not is_f5_model:
                 try:
                     cache_dir = hf_constants.HF_HUB_CACHE
                     repo_cache = Path(cache_dir) / ("models--" + config["hf_repo_id"].replace("/", "--"))
