@@ -42,6 +42,7 @@ def _safe_content_disposition(disposition_type: str, filename: str) -> str:
 
 
 from . import database, models, profiles, history, tts, transcribe, config, export_import, channels, stories, __version__
+from .backends import get_tts_backend
 from .database import get_db, Generation as DBGeneration, VoiceProfile as DBVoiceProfile
 from .utils.progress import get_progress_manager
 from .utils.tasks import get_task_manager
@@ -586,7 +587,7 @@ async def generate_speech(
     """Generate speech from text using a voice profile."""
     task_manager = get_task_manager()
     generation_id = str(uuid.uuid4())
-    
+
     try:
         # Start tracking generation
         task_manager.start_generation(
@@ -594,49 +595,70 @@ async def generate_speech(
             profile_id=data.profile_id,
             text=data.text,
         )
-        
+
         # Get profile
         profile = await profiles.get_profile(data.profile_id, db)
         if not profile:
             raise HTTPException(status_code=404, detail="Profile not found")
-        
+
         # Generate audio
+
+        # Get engine and determine model size/type
+        engine = data.engine or "cosyvoice"
+
+        # For Qwen/CosyVoice engine, use model_size parameter
+        # For F5/E2 engines, use model_type parameter
+        if engine in ["cosyvoice", "qwen"]:
+            # Map cosyvoice to qwen for backend selection
+            backend_engine = "qwen" if engine == "cosyvoice" else engine
+            model_size = data.model_size or "1.7B"
+            model_identifier = model_size
+            tts_model = get_tts_backend(engine=backend_engine)
+        else:
+            # F5 or E2 engine
+            backend_engine = engine
+            model_identifier = data.model_type or ("F5TTS_v1_Base" if engine == "f5" else "E2TTS_Base")
+            tts_model = get_tts_backend(engine=backend_engine, model_type=model_identifier)
+            model_size = None
 
         # Resolve model size and load the correct model FIRST.
         # This must happen before create_voice_prompt_for_profile because that
         # function calls load_model_async(None), which falls back to self.model_size.
         # If the model is already loaded with the right size at that point, it
         # returns immediately and the voice prompt is created by the correct model.
-        tts_model = tts.get_tts_model()
-        model_size = data.model_size or "1.7B"
 
-        # Check if model needs to be downloaded first
-        model_path = tts_model._get_model_path(model_size)
-        if not tts_model._is_model_cached(model_size):
-            # Model is not fully cached — kick off a background download and tell
-            # the client to retry once it's ready.
-            model_name = f"qwen-tts-{model_size}"
+        # Check if model needs to be downloaded first (for Qwen/CosyVoice)
+        if engine in ["cosyvoice", "qwen"]:
+            model_path = tts_model._get_model_path(model_size)
+            if not tts_model._is_model_cached(model_size):
+                # Model is not fully cached — kick off a background download and tell
+                # the client to retry once it's ready.
+                model_name = f"qwen-tts-{model_size}"
 
-            async def download_model_background():
-                try:
-                    await tts_model.load_model_async(model_size)
-                except Exception as e:
-                    task_manager.error_download(model_name, str(e))
+                async def download_model_background():
+                    try:
+                        await tts_model.load_model(model_size)
+                    except Exception as e:
+                        task_manager.error_download(model_name, str(e))
 
-            task_manager.start_download(model_name)
-            asyncio.create_task(download_model_background())
+                task_manager.start_download(model_name)
+                asyncio.create_task(download_model_background())
 
-            raise HTTPException(
-                status_code=202,
-                detail={
-                    "message": f"Model {model_size} is being downloaded. Please wait and try again.",
-                    "model_name": model_name,
-                    "downloading": True,
-                },
-            )
+                raise HTTPException(
+                    status_code=202,
+                    detail={
+                        "message": f"Model {model_size} is being downloaded. Please wait and try again.",
+                        "model_name": model_name,
+                        "downloading": True,
+                    },
+                )
 
-        # Load (or switch to) the requested model before building the voice prompt
-        await tts_model.load_model_async(model_size)
+            # Load (or switch to) the requested model before building the voice prompt
+            await tts_model.load_model(model_size)
+        else:
+            # For F5/E2, load model with model_type
+            # TODO: Add download check for F5/E2 models if needed
+            await tts_model.load_model(model_identifier)
 
         # Create voice prompt from profile (model is already loaded with correct size)
         voice_prompt = await profiles.create_voice_prompt_for_profile(
@@ -671,13 +693,15 @@ async def generate_speech(
             seed=data.seed,
             db=db,
             instruct=data.instruct,
+            engine=engine,
+            model_type=model_identifier if engine in ["f5", "e2"] else model_size,
         )
-        
+
         # Mark generation as complete
         task_manager.complete_generation(generation_id)
-        
+
         return generation
-        
+
     except ValueError as e:
         task_manager.complete_generation(generation_id)
         raise HTTPException(status_code=400, detail=str(e))
@@ -702,17 +726,36 @@ async def stream_speech(
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    tts_model = tts.get_tts_model()
-    model_size = data.model_size or "1.7B"
+    # Get engine and determine model size/type
+    engine = data.engine or "cosyvoice"
 
-    if not tts_model._is_model_cached(model_size):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Model {model_size} is not downloaded yet. Use /generate to trigger a download.",
-        )
+    # For Qwen/CosyVoice engine, use model_size parameter
+    # For F5/E2 engines, use model_type parameter
+    if engine in ["cosyvoice", "qwen"]:
+        # Map cosyvoice to qwen for backend selection
+        backend_engine = "qwen" if engine == "cosyvoice" else engine
+        model_size = data.model_size or "1.7B"
+        model_identifier = model_size
+        tts_model = get_tts_backend(engine=backend_engine)
+    else:
+        # F5 or E2 engine
+        backend_engine = engine
+        model_identifier = data.model_type or ("F5TTS_v1_Base" if engine == "f5" else "E2TTS_Base")
+        tts_model = get_tts_backend(engine=backend_engine, model_type=model_identifier)
+        model_size = None
 
-    # Load the correct model before building the voice prompt (fixes issue #96)
-    await tts_model.load_model_async(model_size)
+    # Check if model is cached (for Qwen/CosyVoice)
+    if engine in ["cosyvoice", "qwen"]:
+        if not tts_model._is_model_cached(model_size):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model {model_size} is not downloaded yet. Use /generate to trigger a download.",
+            )
+        # Load the correct model before building the voice prompt
+        await tts_model.load_model(model_size)
+    else:
+        # For F5/E2, load model with model_type
+        await tts_model.load_model(model_identifier)
 
     voice_prompt = await profiles.create_voice_prompt_for_profile(data.profile_id, db)
 
