@@ -148,28 +148,78 @@ export function GenerationForm() {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="modelSize"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Model Size</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="1.7B">Qwen TTS 1.7B (Higher Quality)</SelectItem>
-                        <SelectItem value="0.6B">Qwen TTS 0.6B (Faster)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>Larger models produce better quality</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {form.watch('engine') === 'cosyvoice' && (
+                <FormField
+                  control={form.control}
+                  name="modelSize"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Model Size</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="1.7B">Qwen TTS 1.7B (Higher Quality)</SelectItem>
+                          <SelectItem value="0.6B">Qwen TTS 0.6B (Faster)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>Larger models produce better quality</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {form.watch('engine') === 'f5' && (
+                <FormField
+                  control={form.control}
+                  name="model_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Model Type</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value || 'F5TTS_v1_Base'}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="F5TTS_v1_Base">F5TTS_v1_Base</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>F5-TTS model variant</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {form.watch('engine') === 'e2' && (
+                <FormField
+                  control={form.control}
+                  name="model_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Model Type</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value || 'E2TTS_Base'}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="E2TTS_Base">E2TTS_Base</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>E2-TTS model variant</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
