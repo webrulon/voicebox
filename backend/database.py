@@ -49,6 +49,8 @@ class Generation(Base):
     duration = Column(Float, nullable=False)
     seed = Column(Integer)
     instruct = Column(Text)
+    engine = Column(String)
+    model_type = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -287,6 +289,25 @@ def _run_migrations(engine):
                 conn.execute(text("ALTER TABLE profiles ADD COLUMN avatar_path VARCHAR"))
                 conn.commit()
                 print("Added avatar_path column to profiles")
+
+    # Migration: Add engine and model_type columns to generations table
+    if 'generations' in inspector.get_table_names():
+        columns = {col['name'] for col in inspector.get_columns('generations')}
+        if 'engine' not in columns:
+            print("Migrating generations: adding engine column")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE generations ADD COLUMN engine VARCHAR"))
+                conn.commit()
+                print("Added engine column to generations")
+
+        # Re-check columns after potential engine migration
+        columns = {col['name'] for col in inspector.get_columns('generations')}
+        if 'model_type' not in columns:
+            print("Migrating generations: adding model_type column")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE generations ADD COLUMN model_type VARCHAR"))
+                conn.commit()
+                print("Added model_type column to generations")
 
 
 def get_db():
