@@ -111,30 +111,71 @@ class STTBackend(Protocol):
 
 
 # Global backend instances
-_tts_backend: Optional[TTSBackend] = None
+# Store backend instances per engine to support multiple engines
+_tts_backends: dict[str, TTSBackend] = {}
 _stt_backend: Optional[STTBackend] = None
 
 
-def get_tts_backend() -> TTSBackend:
+def get_tts_backend(engine: str = "qwen", model_type: Optional[str] = None) -> TTSBackend:
     """
-    Get or create TTS backend instance based on platform.
-    
+    Get or create TTS backend instance based on engine selection.
+
+    Args:
+        engine: TTS engine to use ('qwen', 'f5', or 'e2')
+        model_type: Optional model type for F5/E2 engines
+                   ('F5TTS_v1_Base' for F5, 'E2TTS_Base' for E2)
+
     Returns:
-        TTS backend instance (MLX or PyTorch)
+        TTS backend instance for the selected engine
     """
-    global _tts_backend
-    
-    if _tts_backend is None:
+    global _tts_backends
+
+    # Normalize engine name
+    engine = engine.lower()
+
+    # Validate engine
+    valid_engines = ["qwen", "f5", "e2"]
+    if engine not in valid_engines:
+        raise ValueError(f"Invalid engine '{engine}'. Must be one of: {valid_engines}")
+
+    # For F5 and E2, use model_type to create unique cache key
+    # This allows switching between F5 and E2 model types
+    if engine in ["f5", "e2"]:
+        if model_type is None:
+            # Default model types
+            model_type = "F5TTS_v1_Base" if engine == "f5" else "E2TTS_Base"
+        cache_key = f"{engine}:{model_type}"
+    else:
+        cache_key = engine
+
+    # Return cached backend if exists
+    if cache_key in _tts_backends:
+        return _tts_backends[cache_key]
+
+    # Create new backend based on engine
+    if engine == "qwen":
         backend_type = get_backend_type()
-        
+
         if backend_type == "mlx":
             from .mlx_backend import MLXTTSBackend
-            _tts_backend = MLXTTSBackend()
+            backend = MLXTTSBackend()
         else:
             from .pytorch_backend import PyTorchTTSBackend
-            _tts_backend = PyTorchTTSBackend()
-    
-    return _tts_backend
+            backend = PyTorchTTSBackend()
+
+    elif engine in ["f5", "e2"]:
+        from .f5_backend import F5TTSBackend
+        # F5TTSBackend supports both F5 and E2 via model_type parameter
+        backend = F5TTSBackend(model_type=model_type)
+
+    else:
+        # Should never reach here due to validation above
+        raise ValueError(f"Unsupported engine: {engine}")
+
+    # Cache the backend
+    _tts_backends[cache_key] = backend
+
+    return backend
 
 
 def get_stt_backend() -> STTBackend:
@@ -161,6 +202,6 @@ def get_stt_backend() -> STTBackend:
 
 def reset_backends():
     """Reset backend instances (useful for testing)."""
-    global _tts_backend, _stt_backend
-    _tts_backend = None
+    global _tts_backends, _stt_backend
+    _tts_backends = {}
     _stt_backend = None
